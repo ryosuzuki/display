@@ -32,6 +32,15 @@ const data = [
   ]
 ]
 
+const canvas = []
+for (let i=0; i<8; i++) {
+  let row = []
+  for (let j=0; j<8; j++) {
+    row.push(0)
+  }
+  canvas.push(row)
+}
+
 
 class App extends React.Component {
   constructor (props) {
@@ -40,19 +49,68 @@ class App extends React.Component {
       id: 1,
       step: 0,
       max: 0,
-      data: '',
-      current: '',
+      canvas: '',
+      history: [],
+      active: false,
     }
     this.init = this.init.bind(this);
     this.play = this.play.bind(this);
     this.update = this.update.bind(this);
+    this.toggle = this.toggle.bind(this);
+    this.color = this.color.bind(this);
+    this.colorClick = this.colorClick.bind(this);
+    this.colorMove = this.colorMove.bind(this);
+    this.next = this.next.bind(this);
+    this.save = this.save.bind(this);
     this.init()
   }
 
   init () {
-    this.state.data = data
-    this.state.max = data.length-1
-    this.state.current = data[0]
+    this.state.max = 1
+    this.state.canvas = canvas
+  }
+
+  toggle () {
+    this.state.active = !this.state.active
+    this.setState(this.state)
+  }
+
+  colorClick (i, j) {
+    this.color(i, j)
+  }
+
+  colorMove (i, j) {
+    if (!this.state.active) return
+    this.color(i, j)
+  }
+
+  color (i, j) {
+    console.log(this.state.canvas[i][j])
+    if (this.state.canvas[i][j] === 1) {
+      this.state.canvas[i][j] = 0
+    } else {
+      this.state.canvas[i][j] = 1
+    }
+    this.setState(this.state)
+  }
+
+  next () {
+    let canvas = []
+    for (let i=0; i<8; i++) {
+      let row = []
+      for (let j=0; j<8; j++) {
+        row.push(this.state.canvas[i][j])
+      }
+      canvas.push(row)
+    }
+    this.state.history[this.state.step] = canvas
+    this.state.step++
+    this.state.max = (this.state.max >= this.state.step) ? this.state.max : this.state.step
+    this.setState(this.state)
+  }
+
+  save () {
+    console.log(this.state.history)
   }
 
   play () {
@@ -69,7 +127,8 @@ class App extends React.Component {
 
   update (step) {
     if (step) this.state.step = step
-    this.state.current = this.state.data[this.state.step]
+    this.state.canvas = this.state.history[this.state.step]
+    console.log(this.state.history)
     this.setState(this.state)
   }
 
@@ -77,13 +136,13 @@ class App extends React.Component {
     return <div>
       <div id="main" className="ui grid">
         <section className="eight wide column">
-          <div id="container">
-            {this.state.current.map( (col, i) => {
+          <div id="container" onMouseDown={this.toggle} onMouseUp={this.toggle} >
+            {this.state.canvas.map( (col, i) => {
               return col.map( (row, j) => {
-                if (this.state.current[i][j] === 0) {
-                  return <div className="cell off" id={`cell-${i}-${j}`} ></div>
+                if (this.state.canvas[i][j] === 0) {
+                  return <div className="cell off" id={`cell-${i}-${j}`} onClick={this.colorClick.bind(this, i, j)} onMouseMove={this.colorMove.bind(this, i, j)}></div>
                 } else {
-                  return <div className="cell on" id={`cell-${i}-${j}`} ></div>
+                  return <div className="cell on" id={`cell-${i}-${j}`} onClick={this.colorClick.bind(this, i, j)}></div>
                 }
               })
             })}
@@ -102,10 +161,14 @@ class App extends React.Component {
           ></Slider>
           <br />
           <button className="ui button" onClick={this.play}><i className="fa fa-play"></i></button>
+          <button className="ui button" onClick={this.next}><i className="fa fa-right"></i>Next</button>
           <span>{this.state.step}</span>
+          <br />
+          <br />
+          <button className="ui primary button" onClick={this.save}><i className="fa fa-right"></i>Save</button>
         </section>
         <section id="data" className="eight wide column">
-
+          <pre><code>{this.state.history}</code></pre>
         </section>
       </div>
     </div>
