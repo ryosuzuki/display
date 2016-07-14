@@ -4,33 +4,8 @@ import { createStore } from 'redux'
 import _ from 'lodash'
 import Slider from 'rc-slider'
 import { PrismCode } from 'react-prism'
-
-const data = [
-  [
-    [0, 0, 0, 1],
-    [0, 0, 0, 1],
-    [0, 0, 0, 1],
-    [0, 0, 0, 1],
-  ],
-  [
-    [0, 0, 0, 1],
-    [0, 0, 1, 1],
-    [0, 0, 0, 1],
-    [0, 0, 0, 1],
-  ],
-  [
-    [0, 0, 0, 1],
-    [0, 0, 0, 1],
-    [0, 1, 0, 0],
-    [0, 0, 0, 1],
-  ],
-  [
-    [0, 0, 0, 1],
-    [1, 0, 0, 1],
-    [0, 0, 0, 1],
-    [1, 1, 0, 1],
-  ]
-]
+import Dropzone from 'react-dropzone'
+import Stringify from 'json-stringify-pretty-compact'
 
 const canvas = []
 for (let i=0; i<8; i++) {
@@ -40,7 +15,6 @@ for (let i=0; i<8; i++) {
   }
   canvas.push(row)
 }
-
 
 class App extends React.Component {
   constructor (props) {
@@ -62,6 +36,7 @@ class App extends React.Component {
     this.colorMove = this.colorMove.bind(this);
     this.next = this.next.bind(this);
     this.save = this.save.bind(this);
+    this.onDrop = this.onDrop.bind(this);
     this.init()
   }
 
@@ -109,13 +84,27 @@ class App extends React.Component {
     this.setState(this.state)
   }
 
+  onDrop (files) {
+    let file = files[0]
+    $.get(file.preview, (res) => {
+      console.log(res)
+      this.state.history = res
+      this.state.step = 0
+      this.state.canvas = this.state.history[0]
+      this.state.max = this.state.history.length
+      this.setState(this.state)
+    })
+  }
+
   save () {
-    console.log(this.state.history)
+    let data = Stringify(this.state.history)
+    let blob = new Blob([data], {type: 'text/plain;charset=utf-8'})
+    saveAs(blob, `history-${Date.now()}.json`)
   }
 
   play () {
     let timer = setInterval(() => {
-      if (this.state.max <= this.state.step) {
+      if (this.state.max < this.state.step) {
         clearInterval(timer)
       } else {
         this.state.step++
@@ -126,7 +115,7 @@ class App extends React.Component {
   }
 
   update (step) {
-    if (step) this.state.step = step
+    if (step !== undefined) this.state.step = step
     this.state.canvas = this.state.history[this.state.step]
     console.log(this.state.history)
     this.setState(this.state)
@@ -165,10 +154,14 @@ class App extends React.Component {
           <span>{this.state.step}</span>
           <br />
           <br />
-          <button className="ui primary button" onClick={this.save}><i className="fa fa-right"></i>Save</button>
+          <button className="ui primary button" onClick={this.save}>Save</button>
         </section>
         <section id="data" className="eight wide column">
-          <pre><code>{this.state.history}</code></pre>
+          <pre id="output"><code className="language-history">{Stringify(this.state.history)}</code>
+          </pre>
+          <Dropzone onDrop={this.onDrop}>
+            Drop JSON data here
+          </Dropzone>
         </section>
       </div>
     </div>
