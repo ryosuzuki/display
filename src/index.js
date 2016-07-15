@@ -43,6 +43,16 @@ class App extends React.Component {
   init () {
     this.state.max = 1
     this.state.canvas = canvas
+
+    $.get('/examples/init.json', (res) => {
+      console.log(res)
+      this.state.history = res
+      this.state.step = 0
+      this.state.canvas = this.state.history[0]
+      this.state.max = this.state.history.length
+      this.setState(this.state)
+    })
+
   }
 
   toggle () {
@@ -103,6 +113,8 @@ class App extends React.Component {
   }
 
   play () {
+    this.state.step = 0
+    this.setState(this.state)
     let timer = setInterval(() => {
       if (this.state.max < this.state.step) {
         clearInterval(timer)
