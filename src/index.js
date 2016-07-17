@@ -16,6 +16,58 @@ for (let i=0; i<8; i++) {
   canvas.push(row)
 }
 
+
+window.analysis = (history) => {
+  /*
+    convert (row, col) to id
+    e.g. [4, 2] -> 35
+   */
+  const id_history = []
+  for (let t=0; t<history.length; t++) {
+    let canvas = history[t]
+    let ids = []
+    for (let i=0; i<8; i++) {
+      let col = canvas[i]
+      for (let j=0; j<8; j++) {
+        let bool = col[j]
+        if (bool === 1) {
+          let id = 8*i + j + 1
+          ids.push(id)
+        }
+      }
+    }
+    id_history.push(ids)
+  }
+  console.log(id_history)
+
+  /*
+    get only new id
+    e.g.
+    35                         -> 35
+    35, 36                     -> 36
+    35, 36, 43, 44             -> 43, 44
+    26, 34, 35, 36, 42, 43, 44 -> 26, 34, 42
+    ...
+   */
+  const new_history = []
+  const checked = []
+  for (let t=0; t<history.length; t++) {
+    let ids = id_history[t]
+    let new_ids = []
+    ids.forEach( (id) => {
+      if (!checked.includes(id)) {
+        new_ids.push(id)
+        checked.push(id)
+      }
+    })
+    new_history.push(new_ids)
+  }
+  console.log(new_history)
+
+}
+
+
+
 class App extends React.Component {
   constructor (props) {
     super(props)
@@ -51,9 +103,11 @@ class App extends React.Component {
       this.state.canvas = this.state.history[0]
       this.state.max = this.state.history.length
       this.setState(this.state)
-    })
 
+      window.analysis(this.state.history)
+    })
   }
+
 
   toggle () {
     this.state.active = !this.state.active
