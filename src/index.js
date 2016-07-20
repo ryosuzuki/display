@@ -5,7 +5,10 @@ import _ from 'lodash'
 import Slider from 'rc-slider'
 import { PrismCode } from 'react-prism'
 import Dropzone from 'react-dropzone'
-import Stringify from 'json-stringify-pretty-compact'
+import stringify from 'json-stringify-pretty-compact'
+import shortid from 'shortid'
+import numeric from 'numeric'
+import similarity from 'compute-cosine-similarity'
 
 const canvas = []
 for (let i=0; i<8; i++) {
@@ -18,6 +21,68 @@ for (let i=0; i<8; i++) {
 
 
 window.analysis = (history) => {
+
+
+  let data = {}
+  for (let i=0; i<64; i++) {
+    let col = Math.floor(i / 8)
+    let row = i % 8
+
+    let vector = []
+    for (let t=0; t<history.length; t++) {
+      let prev = (t-1<0) ? 0 : history[t-1][col][row]
+      let next = history[t][col][row]
+
+      vector[t] = next - prev
+    }
+    data[i] = vector
+  }
+  window.data = data
+  window.similarity = similarity
+  // console.log(stringify(data))
+
+
+  let group_ref = {}
+  let group = {}
+  for (let i=0; i<64; i++) {
+    let id_i = i
+    let id_j = undefined
+    let a = data[i]
+    let max = 0
+    for (let j=i+1; j<64; j++) {
+      let b = data[j]
+      let s = similarity(a, b)
+      if (!isNaN(s) && s > max) {
+        max = s
+        id_j = j
+      }
+    }
+    if (id_j) {
+      console.log(`${id_i} and ${id_j} have similarity ${max}`)
+      let group_id
+      if (!group_ref[id_i] && !group_ref[id_j]) {
+        group_id = shortid.generate()
+      } else if (group_ref[id_i] && !group_ref[id_j]) {
+        group_id = group_ref[id_i]
+      } else if (!group_ref[id_i] && group_ref[id_j]) {
+        group_id = group_ref[id_j]
+      } else if (group_ref[id_i] !== group_ref[id_j]) {
+        // check for similarity < 1
+      }
+      group_ref[id_i] = group_id
+      group_ref[id_j] = group_id
+
+      if (!group[group_id]) {
+        group[group_id] = []
+      }
+      group[group_id] = _.union(group[group_id], [id_i, id_j])
+    }
+  }
+
+  window.group = group
+
+  return group
+
   /*
     convert (row, col) to id
     e.g. [4, 2] -> 35
@@ -38,7 +103,7 @@ window.analysis = (history) => {
     }
     id_history.push(ids)
   }
-  console.log(id_history)
+  // console.log(id_history)
 
   /*
     get only new id
@@ -62,7 +127,65 @@ window.analysis = (history) => {
     })
     new_history.push(new_ids)
   }
-  console.log(new_history)
+  // console.log(stringify(new_history))
+
+  /*
+    get plus and minus ids
+    e.g.
+    35, 40, 41                 -> 35, 40, 41 |
+    35, 36                     -> 36         | 40, 41
+    35, 36, 48, 49             -> 48, 49     |
+    26, 34, 35, 36, 42, 43, 44 -> 26, 34, 42 | 48, 49
+                                  43, 44     |
+    ...
+  */
+
+  const plus_history = []
+  const minus_history = []
+  for (let t=0; t<history.length; t++) {
+    let prev_ids = (t-1 < 0) ? [] : id_history[t-1]
+    let next_ids = id_history[t]
+    let plus_ids = _.difference(next_ids, prev_ids)
+    let minus_ids = _.difference(prev_ids, next_ids)
+    plus_history.push(plus_ids)
+    minus_history.push(minus_ids)
+  }
+  // console.log(stringify(plus_history))
+  // console.log(stringify(minus_history))
+
+  function isInclude(groups, ids) {
+    let bool = false
+    ids.forEach( (id) => {
+      let group_id = groups[id]
+    })
+    // groups.forEach( (group) => {
+    //   if (_.isEqual(group, ids)) bool = true
+    // })
+    return bool
+  }
+
+  let groups = {}
+  function assignGroup(ids) {
+    let group_id = shortid.generate()
+    ids.forEach( (id) => {
+      groups[id] = group_id
+    })
+  }
+
+  let check = []
+  function updateGroups(groups, ids) {
+    assignGroup(ids)
+    check = _.union(check, ids)
+  }
+
+  for (let t=0; t<history.length; t++) {
+    let plus_ids = plus_history[t]
+    updateGroups(groups, plus_ids)
+    let minus_ids = plus_history[t]
+    updateGroups(groups, minus_ids)
+  }
+  // console.log(stringify(groups))
+  window.groups = groups
 
 }
 
@@ -104,7 +227,20 @@ class App extends React.Component {
       this.state.max = this.state.history.length
       this.setState(this.state)
 
-      window.analysis(this.state.history)
+      let group = window.analysis(this.state.history)
+      console.log(stringify(group))
+
+      Object.keys(group).forEach( (key) => {
+        let ids = group[key]
+
+        ids.forEach( (id) => {
+          console.log(id, key)
+          $(`.on#cell-${id}`)
+          .addClass(key)
+          .css('background', 'red')
+        })
+      })
+
     })
   }
 
@@ -161,7 +297,7 @@ class App extends React.Component {
   }
 
   save () {
-    let data = Stringify(this.state.history)
+    let data = stringify(this.state.history)
     let blob = new Blob([data], {type: 'text/plain;charset=utf-8'})
     saveAs(blob, `history-${Date.now()}.json`)
   }
@@ -195,9 +331,9 @@ class App extends React.Component {
             {this.state.canvas.map( (col, i) => {
               return col.map( (row, j) => {
                 if (this.state.canvas[i][j] === 0) {
-                  return <div className="cell off" id={`cell-${i}-${j}`} onClick={this.colorClick.bind(this, i, j)} onMouseMove={this.colorMove.bind(this, i, j)}></div>
+                  return <div className="cell off" id={`cell-${8*i+j}`} onClick={this.colorClick.bind(this, i, j)} onMouseMove={this.colorMove.bind(this, i, j)}></div>
                 } else {
-                  return <div className="cell on" id={`cell-${i}-${j}`} onClick={this.colorClick.bind(this, i, j)}></div>
+                  return <div className="cell on" id={`cell-${8*i+j}`} onClick={this.colorClick.bind(this, i, j)}></div>
                 }
               })
             })}
@@ -223,7 +359,7 @@ class App extends React.Component {
           <button className="ui primary button" onClick={this.save}>Save</button>
         </section>
         <section id="data" className="eight wide column">
-          <pre id="output"><code className="language-history">{Stringify(this.state.history)}</code>
+          <pre id="output"><code className="language-history">{stringify(this.state.history)}</code>
           </pre>
           <Dropzone onDrop={this.onDrop}>
             Drop JSON data here
