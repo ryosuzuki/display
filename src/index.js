@@ -20,8 +20,7 @@ for (let i=0; i<8; i++) {
   canvas.push(row)
 }
 
-window.analysis = (history, level) => {
-
+window.initialize = (history) => {
   let data = {}
   for (let i=0; i<64; i++) {
     let col = Math.floor(i / 8)
@@ -37,10 +36,11 @@ window.analysis = (history, level) => {
     data[i] = vector
   }
   window.data = data
-  window.similarity = similarity
-  // console.log(stringify(data))
+  return data
+}
 
 
+window.analysis = (data, level) => {
   let group_refs = {}
   let group = {}
   for (let i=0; i<64; i++) {
@@ -81,111 +81,6 @@ window.analysis = (history, level) => {
   window.group = group
 
   return { group: group, group_refs: group_refs }
-
-  /*
-    convert (row, col) to id
-    e.g. [4, 2] -> 35
-   */
-  const id_history = []
-  for (let t=0; t<history.length; t++) {
-    let canvas = history[t]
-    let ids = []
-    for (let i=0; i<8; i++) {
-      let col = canvas[i]
-      for (let j=0; j<8; j++) {
-        let bool = col[j]
-        if (bool === 1) {
-          let id = 8*i + j + 1
-          ids.push(id)
-        }
-      }
-    }
-    id_history.push(ids)
-  }
-  // console.log(id_history)
-
-  /*
-    get only new id
-    e.g.
-    35                         -> 35
-    35, 36                     -> 36
-    35, 36, 43, 44             -> 43, 44
-    26, 34, 35, 36, 42, 43, 44 -> 26, 34, 42
-    ...
-   */
-  const new_history = []
-  const checked = []
-  for (let t=0; t<history.length; t++) {
-    let ids = id_history[t]
-    let new_ids = []
-    ids.forEach( (id) => {
-      if (!checked.includes(id)) {
-        new_ids.push(id)
-        checked.push(id)
-      }
-    })
-    new_history.push(new_ids)
-  }
-  // console.log(stringify(new_history))
-
-  /*
-    get plus and minus ids
-    e.g.
-    35, 40, 41                 -> 35, 40, 41 |
-    35, 36                     -> 36         | 40, 41
-    35, 36, 48, 49             -> 48, 49     |
-    26, 34, 35, 36, 42, 43, 44 -> 26, 34, 42 | 48, 49
-                                  43, 44     |
-    ...
-  */
-
-  const plus_history = []
-  const minus_history = []
-  for (let t=0; t<history.length; t++) {
-    let prev_ids = (t-1 < 0) ? [] : id_history[t-1]
-    let next_ids = id_history[t]
-    let plus_ids = _.difference(next_ids, prev_ids)
-    let minus_ids = _.difference(prev_ids, next_ids)
-    plus_history.push(plus_ids)
-    minus_history.push(minus_ids)
-  }
-  // console.log(stringify(plus_history))
-  // console.log(stringify(minus_history))
-
-  function isInclude(groups, ids) {
-    let bool = false
-    ids.forEach( (id) => {
-      let group_id = groups[id]
-    })
-    // groups.forEach( (group) => {
-    //   if (_.isEqual(group, ids)) bool = true
-    // })
-    return bool
-  }
-
-  let groups = {}
-  function assignGroup(ids) {
-    let group_id = shortid.generate()
-    ids.forEach( (id) => {
-      groups[id] = group_id
-    })
-  }
-
-  let check = []
-  function updateGroups(groups, ids) {
-    assignGroup(ids)
-    check = _.union(check, ids)
-  }
-
-  for (let t=0; t<history.length; t++) {
-    let plus_ids = plus_history[t]
-    updateGroups(groups, plus_ids)
-    let minus_ids = plus_history[t]
-    updateGroups(groups, minus_ids)
-  }
-  // console.log(stringify(groups))
-  window.groups = groups
-
 }
 
 
@@ -205,6 +100,8 @@ class App extends React.Component {
       group_color: {},
       color_refs: {},
       analyzeMode: false,
+      threshold: 0.99,
+      data: [],
     }
     this.init = this.init.bind(this);
     this.play = this.play.bind(this);
@@ -231,6 +128,7 @@ class App extends React.Component {
       this.state.step = 0
       this.state.canvas = this.state.history[0]
       this.state.max = this.state.history.length
+      this.state.data = window.initialize(this.state.history)
       this.setState(this.state)
 
     })
@@ -295,10 +193,9 @@ class App extends React.Component {
   }
 
   analyze () {
-    this.state.analyzeMode = !this.state.analyzeMode
+    this.state.analyzeMode = true
 
-    this.state.threshold = 0.99
-    let { group, group_refs } = window.analysis(this.state.history, this.state.threshold)
+    let { group, group_refs } = window.analysis(this.state.data, this.state.threshold)
     console.log(stringify(group))
     console.log(stringify(group_refs))
     this.state.group = group
@@ -331,7 +228,7 @@ class App extends React.Component {
     this.state.step = 0
     this.setState(this.state)
     let timer = setInterval(() => {
-      if (this.state.max < this.state.step) {
+      if (this.state.max <= this.state.step) {
         clearInterval(timer)
       } else {
         this.state.step++
@@ -353,6 +250,13 @@ class App extends React.Component {
     let group_id = this.state.group_refs[id]
 
     return 'red'
+  }
+
+  changeThreshold (event) {
+    console.log(event.target.value)
+    this.state.threshold = event.target.value
+    this.analyze()
+    this.setState(this.state)
   }
 
 
@@ -394,7 +298,10 @@ class App extends React.Component {
           <button className="ui primary button" onClick={this.save}>Save</button>
           <br />
           <br />
-          <button className="ui grey button" onClick={this.analyze}>Analyze</button>
+          <div className="ui left action input">
+            <button className="ui grey button" onClick={this.analyze}>Analyze</button>
+            <input type="text" value={this.state.threshold} onChange={this.changeThreshold.bind(this)} />
+          </div>
           <br />
           <If condition={this.state.analyzeMode}>
             { Object.keys(this.state.group_color).map( (key) => {
@@ -440,4 +347,9 @@ const addCode = (content) => {
     content: content
   }
 }
+
+
+
+
+
 
