@@ -9,6 +9,7 @@ import stringify from 'json-stringify-pretty-compact'
 import shortid from 'shortid'
 import numeric from 'numeric'
 import similarity from 'compute-cosine-similarity'
+import rd3 from 'react-d3'
 
 const canvas = []
 for (let i=0; i<8; i++) {
@@ -19,9 +20,7 @@ for (let i=0; i<8; i++) {
   canvas.push(row)
 }
 
-
-window.analysis = (history) => {
-
+window.analysis = (history, level) => {
 
   let data = {}
   for (let i=0; i<64; i++) {
@@ -42,7 +41,7 @@ window.analysis = (history) => {
   // console.log(stringify(data))
 
 
-  let group_ref = {}
+  let group_refs = {}
   let group = {}
   for (let i=0; i<64; i++) {
     let id_i = i
@@ -57,20 +56,20 @@ window.analysis = (history) => {
         id_j = j
       }
     }
-    if (id_j) {
+    if (id_j && max > level) {
       console.log(`${id_i} and ${id_j} have similarity ${max}`)
       let group_id
-      if (!group_ref[id_i] && !group_ref[id_j]) {
+      if (!group_refs[id_i] && !group_refs[id_j]) {
         group_id = shortid.generate()
-      } else if (group_ref[id_i] && !group_ref[id_j]) {
-        group_id = group_ref[id_i]
-      } else if (!group_ref[id_i] && group_ref[id_j]) {
-        group_id = group_ref[id_j]
-      } else if (group_ref[id_i] !== group_ref[id_j]) {
+      } else if (group_refs[id_i] && !group_refs[id_j]) {
+        group_id = group_refs[id_i]
+      } else if (!group_refs[id_i] && group_refs[id_j]) {
+        group_id = group_refs[id_j]
+      } else if (group_refs[id_i] !== group_refs[id_j]) {
         // check for similarity < 1
       }
-      group_ref[id_i] = group_id
-      group_ref[id_j] = group_id
+      group_refs[id_i] = group_id
+      group_refs[id_j] = group_id
 
       if (!group[group_id]) {
         group[group_id] = []
@@ -81,7 +80,7 @@ window.analysis = (history) => {
 
   window.group = group
 
-  return group
+  return { group: group, group_refs: group_refs }
 
   /*
     convert (row, col) to id
@@ -201,6 +200,11 @@ class App extends React.Component {
       canvas: '',
       history: [],
       active: false,
+      group: {},
+      group_refs: {},
+      group_color: {},
+      color_refs: {},
+      analyzeMode: false,
     }
     this.init = this.init.bind(this);
     this.play = this.play.bind(this);
@@ -211,7 +215,9 @@ class App extends React.Component {
     this.colorMove = this.colorMove.bind(this);
     this.next = this.next.bind(this);
     this.save = this.save.bind(this);
+    this.analyze = this.analyze.bind(this);
     this.onDrop = this.onDrop.bind(this);
+    this.getColor = this.getColor.bind(this);
     this.init()
   }
 
@@ -226,20 +232,6 @@ class App extends React.Component {
       this.state.canvas = this.state.history[0]
       this.state.max = this.state.history.length
       this.setState(this.state)
-
-      let group = window.analysis(this.state.history)
-      console.log(stringify(group))
-
-      Object.keys(group).forEach( (key) => {
-        let ids = group[key]
-
-        ids.forEach( (id) => {
-          console.log(id, key)
-          $(`.on#cell-${id}`)
-          .addClass(key)
-          .css('background', 'red')
-        })
-      })
 
     })
   }
@@ -260,7 +252,7 @@ class App extends React.Component {
   }
 
   color (i, j) {
-    console.log(this.state.canvas[i][j])
+    // console.log(this.state.canvas[i][j])
     if (this.state.canvas[i][j] === 1) {
       this.state.canvas[i][j] = 0
     } else {
@@ -302,6 +294,39 @@ class App extends React.Component {
     saveAs(blob, `history-${Date.now()}.json`)
   }
 
+  analyze () {
+    this.state.analyzeMode = !this.state.analyzeMode
+
+    this.state.threshold = 0.99
+    let { group, group_refs } = window.analysis(this.state.history, this.state.threshold)
+    console.log(stringify(group))
+    console.log(stringify(group_refs))
+    this.state.group = group
+    this.state.group_refs = group_refs
+    window.group_refs = group_refs
+
+    let col = ["#3366cc", "#dc3912", "#ff9900", "#109618", "#990099", "#0099c6", "#dd4477", "#66aa00", "#b82e2e", "#316395", "#994499", "#22aa99", "#aaaa11", "#6633cc", "#e67300", "#8b0707", "#651067", "#329262", "#5574a6", "#3b3eac"];
+    let i = 0
+    let group_color = {}
+    let color_refs = {}
+    Object.keys(group).forEach( (group_id) => {
+      if (!group_color[group_id]) {
+        group_color[group_id] = col[i]
+        i++
+      }
+    })
+    Object.keys(group_refs).forEach( (id) => {
+      let group_id = group_refs[id]
+      color_refs[id] = group_color[group_id]
+    })
+    console.log(stringify(group_color))
+    console.log(stringify(color_refs))
+    this.state.group_color = group_color
+    this.state.color_refs = color_refs
+
+    this.setState(this.state)
+  }
+
   play () {
     this.state.step = 0
     this.setState(this.state)
@@ -310,7 +335,7 @@ class App extends React.Component {
         clearInterval(timer)
       } else {
         this.state.step++
-        console.log(this.state)
+        // console.log(this.state)
         this.update()
       }
     }, 100)
@@ -319,9 +344,17 @@ class App extends React.Component {
   update (step) {
     if (step !== undefined) this.state.step = step
     this.state.canvas = this.state.history[this.state.step]
-    console.log(this.state.history)
+    // console.log(this.state.history)
     this.setState(this.state)
   }
+
+  getColor (i, j) {
+    let id = 8*i+j
+    let group_id = this.state.group_refs[id]
+
+    return 'red'
+  }
+
 
   render () {
     return <div>
@@ -332,8 +365,10 @@ class App extends React.Component {
               return col.map( (row, j) => {
                 if (this.state.canvas[i][j] === 0) {
                   return <div className="cell off" id={`cell-${8*i+j}`} onClick={this.colorClick.bind(this, i, j)} onMouseMove={this.colorMove.bind(this, i, j)}></div>
+                } else if (!this.state.analyzeMode) {
+                  return <div className={`cell on ${this.state.group_refs[8*i+j]}`} id={`cell-${8*i+j}`}  onClick={this.colorClick.bind(this, i, j)}></div>
                 } else {
-                  return <div className="cell on" id={`cell-${8*i+j}`} onClick={this.colorClick.bind(this, i, j)}></div>
+                  return <div className={`cell on ${this.state.group_refs[8*i+j]}`} id={`cell-${8*i+j}`} style={{ background: this.state.color_refs[8*i+j] }} onClick={this.colorClick.bind(this, i, j)}></div>
                 }
               })
             })}
@@ -357,6 +392,20 @@ class App extends React.Component {
           <br />
           <br />
           <button className="ui primary button" onClick={this.save}>Save</button>
+          <br />
+          <br />
+          <button className="ui grey button" onClick={this.analyze}>Analyze</button>
+          <br />
+          <If condition={this.state.analyzeMode}>
+            { Object.keys(this.state.group_color).map( (key) => {
+              let color = this.state.group_color[key]
+              let ids = this.state.group[key]
+              return <div style={{float: 'left', width: '100%'}}>
+                <div className="cell" style={{ background: color }}></div>
+                <span>{stringify(ids)}</span>
+              </div>
+            }) }
+          </If>
         </section>
         <section id="data" className="eight wide column">
           <pre id="output"><code className="language-history">{stringify(this.state.history)}</code>
