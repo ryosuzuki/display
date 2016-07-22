@@ -102,6 +102,8 @@ class App extends React.Component {
       analyzeMode: false,
       threshold: 0.99,
       data: [],
+      cells: [],
+      remains: [],
     }
     this.init = this.init.bind(this);
     this.play = this.play.bind(this);
@@ -129,8 +131,16 @@ class App extends React.Component {
       this.state.canvas = this.state.history[0]
       this.state.max = this.state.history.length
       this.state.data = window.initialize(this.state.history)
-      this.setState(this.state)
 
+      let zero = Array.apply(null, Array(this.state.max)).map(Number.prototype.valueOf, 0)
+      let cells = []
+      Object.keys(data).forEach( (id) => {
+        id = parseInt(id)
+        let vector = data[id]
+        if (!_.isEqual(vector, zero)) cells.push(id)
+      })
+      this.state.cells = cells
+      this.setState(this.state)
     })
   }
 
@@ -221,6 +231,14 @@ class App extends React.Component {
     this.state.group_color = group_color
     this.state.color_refs = color_refs
 
+    let remains = []
+    this.state.cells.forEach( (cell) => {
+      let ids = Object.keys(this.state.group_refs).map( (id) => {
+        return parseInt(id)
+      })
+      if (!ids.includes(cell)) remains.push(cell)
+    })
+    this.state.remains = remains
     this.setState(this.state)
   }
 
@@ -297,29 +315,45 @@ class App extends React.Component {
           <br />
           <button className="ui primary button" onClick={this.save}>Save</button>
           <br />
+          <Dropzone onDrop={this.onDrop}>
+            Drop JSON data here
+          </Dropzone>
           <br />
+        </section>
+        <section id="data" className="eight wide column">
           <div className="ui left action input">
             <button className="ui grey button" onClick={this.analyze}>Analyze</button>
             <input type="text" value={this.state.threshold} onChange={this.changeThreshold.bind(this)} />
           </div>
           <br />
           <If condition={this.state.analyzeMode}>
-            { Object.keys(this.state.group_color).map( (key) => {
-              let color = this.state.group_color[key]
-              let ids = this.state.group[key]
-              return <div style={{float: 'left', width: '100%'}}>
-                <div className="cell" style={{ background: color }}></div>
-                <span>{stringify(ids)}</span>
+            <div style={{float: 'left', width: '100%'}}>
+              <h2>After: {Object.keys(this.state.group).length + this.state.remains.length}</h2>
+              { Object.keys(this.state.group_color).map( (key) => {
+                let color = this.state.group_color[key]
+                let ids = this.state.group[key]
+                return <div style={{float: 'left', width: '100%'}}>
+                  <div className="cell" style={{ background: color }}></div>
+                  <span>{stringify(ids)}</span>
+                </div>
+              }) }
+              <div style={{float: 'left', width: '100%'}}>
+                <div className="cell" style={{ background: 'black' }}></div>
+                <span>{`x ${this.state.remains.length}`}</span>
+                <p>{stringify(this.state.remains)}<br /><br /></p>
               </div>
-            }) }
+            </div>
           </If>
-        </section>
-        <section id="data" className="eight wide column">
-          <pre id="output"><code className="language-history">{stringify(this.state.history)}</code>
+          <div style={{float: 'left', width: '100%'}}>
+            <h2>Before: {this.state.cells.length}</h2>
+            <div style={{float: 'left', width: '100%'}}>
+              <div className="cell" style={{ background: 'black' }}></div>
+              <span>{`x ${this.state.cells.length}`}</span>
+              <p>{stringify(this.state.cells)}</p>
+            </div>
+          </div>
+          <pre id="output" style={{float: 'left', width: '100%', margin: '20px 0' }}><code className="language-history">{stringify(this.state.history)}</code>
           </pre>
-          <Dropzone onDrop={this.onDrop}>
-            Drop JSON data here
-          </Dropzone>
         </section>
       </div>
     </div>
